@@ -1,0 +1,17 @@
+  [mcp_servers.nb2lite-agent]
+  command = "/opt/homebrew/bin/python3"
+  args = ["/Users/xbill/nb2lite-codex/server.py"]
+  enabled = true
+  env_vars = ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+
+  [mcp_servers.nb2lite-agent.tools.generate_image]
+  approval_mode = "approve"
+
+[mcp_servers.nb2lite-agent.tools.get_help]
+approval_mode = "approve"
+
+[mcp_servers.nb2lite-agent.tools.edit_image]
+approval_mode = "approve"
+
+[mcp_servers.nb2lite-agent.tools.edit_local_image]
+approval_mode = "approve"

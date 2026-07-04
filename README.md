@@ -1,140 +1,199 @@
-# 🌌 NB2Lite Agent
+# NB2Lite Agent
 
-[![Model: gemini-3.1-flash-lite-image](https://img.shields.io/badge/Model-gemini--3.1--flash--lite--image-orange.svg)](#)
-[![API: Interactions API](https://img.shields.io/badge/API-Interactions%20API-blue.svg)](GEMINI.md)
-[![Protocol: FastMCP](https://img.shields.io/badge/Protocol-FastMCP-green.svg)](#)
+NB2Lite Agent is a Python/FastMCP server that exposes Gemini image generation and editing as MCP tools. It wraps the Google GenAI SDK Interactions API for `gemini-3.1-flash-lite-image`, saves returned images locally, and returns the interaction IDs needed for multi-turn edits.
 
-This repository contains a high-performance Model Context Protocol (MCP) server for interacting with **gemini-3.1-flash-lite-image**, Google's high-efficiency Gemini Image model designed for exceptional speed, low latency, and high-fidelity image generation and editing.
+The current project is intentionally small:
 
-Unlike traditional stateless image models, `gemini-3.1-flash-lite-image` supports the stateful **Interactions API**, allowing AI agents and developers to iteratively edit, refine, and transform images using natural language within a single context session.
+- `server.py` defines the FastMCP server and tool implementations.
+- `test_agent.py` contains mocked unit tests for helper logic and tool behavior.
+- `set_env.sh` configures local Gemini credentials and updates legacy Kiro MCP settings when present.
+- `.codex/config.toml` contains a Codex MCP server entry for this repo.
 
----
+## Features
 
-## ✨ Features
+- Text-to-image generation through `generate_image`.
+- Stateful image edits through `edit_image` using a previous interaction ID.
+- Local image editing through `edit_local_image`, with local images encoded as inline base64 input.
+- Runtime help through `get_help`.
+- Configurable model name, output directory, aspect ratio, and thinking level.
+- Concurrent-safe file names using timestamp plus UUID suffixes.
 
-- ⚡ **Low Latency & High Scale**: Under 2-second generation times, offering exceptional quality with blazing-fast speeds.
-- 🔄 **Stateful Multi-Turn Edits**: Maintain pixel and contextual continuity across multiple edits using interaction IDs.
-- 🎨 **Inline Local Image Modding**: Upload existing images in-line via Base64 and describe your edits directly.
-- 🧠 **Thinking Budgets**: Adjust latency vs. quality with configurable reasoning steps (`minimal`, `low`, `medium`, `high`).
-- ✍️ **Enhanced Text & i18n**: Advanced text rendering in English and 25+ other languages.
-- 📂 **Concurrent File Management**: Thread-safe image saving with UUID-appended unique file naming and custom output folders.
+## Requirements
 
----
+- Python 3.10 or newer.
+- A Gemini API key available as `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- Python packages from [requirements.txt](/Users/xbill/nb2lite-codex/requirements.txt):
+  - `google-genai`
+  - `mcp`
 
-## ⚙️ Environment Configuration
-
-The MCP server checks the following environment variables on startup and execution:
-
-| Variable | Type | Description | Default |
-| :--- | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | `str` | Primary API Key used to authenticate with the Gemini API. | *Required (or fallback)* |
-| `GOOGLE_API_KEY` | `str` | Fallback API Key used if `GEMINI_API_KEY` is not defined. | *Optional* |
-| `GEMINI_MODEL_NAME` | `str` | Overrides the default model used for interactions. | `"gemini-3.1-flash-lite-image"` |
-| `IMAGE_OUTPUT_DIR` | `str` | Sets the local directory where generated/edited images are stored. | `"."` (current directory) |
-
----
-
-## 🚀 Getting Started
-
-### 1. Prerequisites
-
-Ensure you have Python 3.10+ installed. Install the required dependencies using the [Makefile](Makefile) or pip:
+Install dependencies:
 
 ```bash
 make install
-# or
+```
+
+or:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+## Configuration
 
-You can configure your credentials interactively or reuse an existing key file using the helper script:
+The server reads these environment variables:
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `GEMINI_API_KEY` | Yes, unless `GOOGLE_API_KEY` is set | None | Primary Gemini API key. |
+| `GOOGLE_API_KEY` | Fallback | None | Used when `GEMINI_API_KEY` is not set. |
+| `GEMINI_MODEL_NAME` | No | `gemini-3.1-flash-lite-image` | Overrides the model passed to the Interactions API. |
+| `IMAGE_OUTPUT_DIR` | No | `.` | Directory where generated and edited images are saved. |
+
+Use the helper script to export credentials for the current shell and write a local `.env` file:
 
 ```bash
-# Set up environment and export credentials
 source set_env.sh
 ```
 
-> [!NOTE]
-> The `set_env.sh` script automatically reads your key from `~/gemini.key` if it exists. If not, it prompts you for the key, stores it securely in `~/gemini.key` for persistence across sessions, and exports both `GEMINI_API_KEY` and `GOOGLE_API_KEY` (fallback).
+`set_env.sh` reads `~/gemini.key` when it exists. Otherwise it prompts for a key, writes it to `~/gemini.key`, sets the file mode to `600`, exports both `GEMINI_API_KEY` and `GOOGLE_API_KEY`, and updates `.kiro/settings/mcp.json` if that legacy config exists.
 
----
+## Running
 
-## 🤖 MCP Server Integration
-
-The FastMCP server defined in [server.py](server.py) exposes the full capabilities of `gemini-3.1-flash-lite-image` directly to your AI agents or assistants as tools.
-
-### Run the Server
-
-You can run the server locally or in development mode using:
+Start the MCP server directly:
 
 ```bash
 make run
-# or run with MCP dev tools
+```
+
+or:
+
+```bash
+python server.py
+```
+
+For MCP development tooling:
+
+```bash
 mcp dev server.py
 ```
 
-### 🛠️ Exposed Tools
+## Codex MCP Configuration
 
-#### 1. `generate_image`
-Generates a 1k resolution image from a text prompt and saves it locally.
+This repo includes [.codex/config.toml](/Users/xbill/nb2lite-codex/.codex/config.toml), which registers `nb2lite-agent` as a local MCP server:
 
-* **Arguments**:
-  - `prompt` (`str`): The natural language description of the image.
-  - `aspect_ratio` (`str`): Supported: `1:1`, `16:9`, `9:16`, `4:3`, `3:4` (Default: `"1:1"`).
-  - `thinking_level` (`str`): Configurable thinking budget: `minimal`, `low`, `medium`, `high` (Default: `"medium"`).
-* **Usage Example**:
-  ```python
-  # Tool Call
-  generate_image(prompt="A futuristic cyberpunk kitchen cooking noodles", aspect_ratio="16:9", thinking_level="high")
-  ```
+```toml
+[mcp_servers.nb2lite-agent]
+command = "/opt/homebrew/bin/python3"
+args = ["/Users/xbill/nb2lite-codex/server.py"]
+enabled = true
+env_vars = ["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+```
 
-#### 2. `edit_image`
-Iteratively refines or modifies an existing image while preserving pixel and contextual continuity.
+If your Python path or checkout path differs, update `command` and `args` accordingly.
 
-* **Arguments**:
-  - `previous_interaction_id` (`str`): The unique ID returned from the previous generation or edit.
-  - `edit_prompt` (`str`): Natural language description of what to change or add in the image.
-  - `thinking_level` (`str`): Configurable thinking budget: `minimal`, `low`, `medium`, `high` (Default: `"medium"`).
-* **Usage Example**:
-  ```python
-  # Tool Call
-  edit_image(previous_interaction_id="int_abc123xyz", edit_prompt="add a neon green glowing sign saying 'RAMEN' on the wall", thinking_level="high")
-  ```
+## MCP Tools
 
-#### 3. `edit_local_image`
-Uploads a local image file in-line via Base64 and applies edits described in natural language.
+### `generate_image`
 
-* **Arguments**:
-  - `image_path` (`str`): Absolute or relative path to the local image file.
-  - `edit_prompt` (`str`): Natural language description of how to edit or modify the image.
-  - `aspect_ratio` (`str`): Supported: `1:1`, `16:9`, `9:16`, `4:3`, `3:4` (Default: `"1:1"`).
-  - `thinking_level` (`str`): Configurable thinking budget: `minimal`, `low`, `medium`, `high` (Default: `"medium"`).
-* **Usage Example**:
-  ```python
-  # Tool Call
-  edit_local_image(image_path="./my_sketch.png", edit_prompt="Render this hand-drawn sketch as a high-fidelity 3D model", aspect_ratio="4:3")
-  ```
+Generates a new image from a text prompt and saves it locally.
 
----
+Arguments:
 
-## 🛠️ Development & Commands
+- `prompt` (`str`, required): Natural language image description.
+- `aspect_ratio` (`str`, optional): `1:1`, `16:9`, `9:16`, `4:3`, or `3:4`. Default: `1:1`.
+- `thinking_level` (`str`, optional): `minimal`, `low`, `medium`, or `high`. Default: `medium`.
 
-Use the [Makefile](Makefile) to streamline common workflows:
+Example:
+
+```python
+generate_image(
+    prompt="A compact workstation overlooking a rainy neon city",
+    aspect_ratio="16:9",
+    thinking_level="high",
+)
+```
+
+### `edit_image`
+
+Edits an image from a previous interaction while preserving state through `previous_interaction_id`.
+
+Arguments:
+
+- `previous_interaction_id` (`str`, required): Interaction ID from a previous generation or edit.
+- `edit_prompt` (`str`, required): Natural language edit instruction.
+- `thinking_level` (`str`, optional): `minimal`, `low`, `medium`, or `high`. Default: `medium`.
+
+Example:
+
+```python
+edit_image(
+    previous_interaction_id="int_abc123",
+    edit_prompt="Change the city lights to warm amber and add light fog",
+    thinking_level="medium",
+)
+```
+
+### `edit_local_image`
+
+Uploads a local image as base64 input and applies a prompt-based edit.
+
+Arguments:
+
+- `image_path` (`str`, required): Relative or absolute path to a local image.
+- `edit_prompt` (`str`, required): Natural language edit instruction.
+- `aspect_ratio` (`str`, optional): `1:1`, `16:9`, `9:16`, `4:3`, or `3:4`. Default: `1:1`.
+- `thinking_level` (`str`, optional): `minimal`, `low`, `medium`, or `high`. Default: `medium`.
+
+Example:
+
+```python
+edit_local_image(
+    image_path="./reference.png",
+    edit_prompt="Keep the composition but render it as a polished product mockup",
+    aspect_ratio="4:3",
+)
+```
+
+### `get_help`
+
+Returns server help text, current configuration status, available tools, and output file behavior.
+
+## Output Files
+
+Successful image responses are written to `IMAGE_OUTPUT_DIR` using this pattern:
+
+```text
+<prefix>_<timestamp>_<uuid_hex>.<extension>
+```
+
+Prefixes are:
+
+- `gen` for `generate_image`
+- `edit` for `edit_image`
+- `edit_local` for `edit_local_image`
+
+The extension is inferred from the returned image MIME type. JPEG is used as the fallback.
+
+## Development
+
+Common commands:
 
 | Command | Description |
-| :--- | :--- |
-| `make install` | Installs Python requirements. |
-| `make run` | Starts the FastMCP server. |
-| `make test` | Runs the full suite of agent integration tests. |
-| `make lint` | Performs style, formatting, and static type checking (`ruff`, `mypy`). |
-| `make clean` | Cleans up local Python cache files. |
+| --- | --- |
+| `make install` | Install runtime dependencies. |
+| `make run` | Start the MCP server. |
+| `make test` | Run the mocked unit test suite. |
+| `make lint` | Run `ruff check`, `ruff format --check`, and `mypy`. |
+| `make clean` | Remove Python and tooling caches. |
 
----
+Run tests:
 
+```bash
+make test
+```
 
----
+The tests mock Gemini API responses; they do not require network access or a real API key for the covered cases.
 
-## 📚 Documentation
+## Related Documentation
 
-- [GEMINI.md](GEMINI.md) - Complete Interactions API developer guide, Python SDK walkthrough, and raw API specifications.
+- [GEMINI.md](/Users/xbill/nb2lite-codex/GEMINI.md) explains how the project maps Gemini Interactions API concepts to the MCP tools.

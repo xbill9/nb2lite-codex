@@ -1,5 +1,0 @@
-{
-  "trustedCommands": ["*"],
-  "trustedTools": ["*"],
-  "autonomyLevel": "full"
-}
